@@ -1,7 +1,7 @@
 // One Line, One Laugh — entry program (Node 22, stdlib only).
-// Writes exactly one funny line to $MAKEFUN_OUTPUT_DIR/entry.txt,
-// validates the competition gate (UTF-8, 1-200 chars, not only
-// whitespace), then reads the file back to verify byte-for-byte.
+// Writes exactly one funny line to $MAKEFUN_OUTPUT_DIR/entry.txt, then
+// validates the competition gate and reads the file back to verify it
+// byte-for-byte before reporting success.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,25 +16,40 @@ const outPath = join(outDir, "entry.txt");
 
 writeFileSync(outPath, ENTRY, "utf8");
 
-// Gate validation: the sealed scorer checks UTF-8 text of 1-200
-// characters, not only whitespace. The entry must also be exactly one
-// line: no newline characters anywhere, and no trailing newline, so the
-// byte count stays small (the tie-break favours fewer bytes).
+// Gate validation, one named check at a time so a failure says exactly
+// which rule broke: UTF-8 text of 1-200 characters, a single line with
+// no newline anywhere (and no trailing newline, so the byte count stays
+// small for the fewer-bytes tie-break), no leading or trailing
+// whitespace, and plain ASCII so chars and bytes agree.
+function checkGate(text: string): string[] {
+  const problems: string[] = [];
+  if (text.length < 1 || text.length > 200) {
+    problems.push(`length ${text.length} chars (need 1-200)`);
+  }
+  if (Buffer.byteLength(text, "utf8") !== text.length) {
+    problems.push("not plain ASCII (chars and bytes disagree)");
+  }
+  if (text.includes("\n") || text.includes("\r")) {
+    problems.push("not a single line (newline found)");
+  }
+  if (text.trim().length === 0) {
+    problems.push("only whitespace");
+  }
+  if (text !== text.trim()) {
+    problems.push("leading or trailing whitespace");
+  }
+  return problems;
+}
+
 const written = readFileSync(outPath, "utf8");
-const byteLength = Buffer.byteLength(written, "utf8");
-if (written.length < 1 || written.length > 200) {
-  throw new Error(`gate failed: entry is ${written.length} chars (need 1-200)`);
-}
-if (byteLength !== written.length) {
-  throw new Error("gate failed: entry is not plain ASCII");
-}
-if (written.includes("\n") || written.includes("\r")) {
-  throw new Error("gate failed: entry is not a single line");
-}
-if (written.trim().length === 0) {
-  throw new Error("gate failed: entry is only whitespace");
+const problems = checkGate(written);
+if (problems.length > 0) {
+  throw new Error(`gate failed: ${problems.join("; ")}`);
 }
 if (written !== ENTRY) {
   throw new Error("verification failed: file does not match the entry");
 }
-console.log(`entry written (${written.length} chars, ${byteLength} bytes): ${written}`);
+const words = written.split(/\s+/).length;
+console.log(
+  `entry written (${written.length} chars, ${Buffer.byteLength(written, "utf8")} bytes, ${words} words): ${written}`,
+);
